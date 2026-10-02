@@ -11,8 +11,58 @@
   const VINYL_FONT = 5.5;
   const ROTATE_MS = 11000;
 
+  /* ─── settings ────────────────────────────────────────── */
+  const DEFAULTS = { plate: true, vinyl: true, adapt: true, motion: true };
+  let settings = Object.assign({}, DEFAULTS);
+
+  const store = () => window.Spicetify && Spicetify.LocalStorage
+    ? Spicetify.LocalStorage
+    : { get: (k) => localStorage.getItem(k), set: (k, v) => localStorage.setItem(k, v) };
+
+  function loadSettings() {
+    try {
+      const raw = store().get("ascii-theme:settings");
+      if (raw) settings = Object.assign({}, DEFAULTS, JSON.parse(raw));
+    } catch (e) {}
+  }
+  function saveSettings() {
+    try { store().set("ascii-theme:settings", JSON.stringify(settings)); } catch (e) {}
+  }
+  function applySettings() {
+    if (plate) plate.classList.toggle("ascii-disabled", !settings.plate);
+    if (vinyl) vinyl.classList.toggle("ascii-disabled", !settings.vinyl);
+    document.body.classList.toggle("ascii-motion-off", !settings.motion);
+  }
+
+  function registerSettings() {
+    const M = window.Spicetify && Spicetify.Menu;
+    if (!M || !M.Item || !M.SubMenu) { menuState = "api-missing"; return false; }
+    try {
+      const add = (label, key, after) => new M.Item(label, settings[key], (it) => {
+        settings[key] = !!it.isEnabled;
+        saveSettings();
+        after && after(settings[key]);
+      });
+      const sub = new M.SubMenu("ASCII EDITION", [
+        add("ASCII plate", "plate", () => applySettings()),
+        add("Vinyl turntable", "vinyl", () => applySettings()),
+        add("Auto-tune art", "adapt", () => {
+          if (!plate) return;
+          plate.dataset.src = "";
+          drawPlate();
+          const vd = vinyl && vinyl.querySelector("pre");
+          if (vd) { vd.dataset.src = ""; drawVinyl(); }
+        }),
+        add("Motion", "motion", () => applySettings())
+      ]);
+      sub.register();
+      menuState = "registered";
+      return true;
+    } catch (e) { menuState = "threw:" + e.message; return false; }
+  }
+
   let plate = null, masthead = null, spread = null, vinyl = null,
-      fig = 0, timer = null, clock = null, playWatch = null, mounted = false;
+      fig = 0, timer = null, clock = null, playWatch = null, mounted = false, menuState = "pending";
   const cache = new Map();
 
   const loadClean = (url) => new Promise((ok, no) => {
@@ -209,10 +259,10 @@
 
     loadClean(pick).then((im) => {
       if (!plate) return;
-      const t = tune(im);
+      const t = settings.adapt ? tune(im) : {};
       const rows = plateRowsFor(cols, im.naturalHeight / im.naturalWidth);
       pre.innerHTML = render(im, cols, rows, t);
-      pre.dataset.ink = t.ink;
+      pre.dataset.ink = t.ink || "";
       pre.classList.remove("ascii-wipe");
       void pre.offsetWidth;
       pre.classList.add("ascii-wipe");
@@ -237,9 +287,9 @@
       if (vd.dataset.src !== url) {
         vd.dataset.src = url;
         const g = grid(vd.clientWidth, vd.clientHeight, VINYL_FONT, 1);
-        const html = paint(url, g[0], g[1], {
-          tune, done: (h) => { if (vd.dataset.src === url) vd.innerHTML = h; }
-        });
+        const opt = { done: (h) => { if (vd.dataset.src === url) vd.innerHTML = h; } };
+        if (settings.adapt) opt.tune = tune;
+        const html = paint(url, g[0], g[1], opt);
         if (html) vd.innerHTML = html;
       }
       vinyl.classList.add("has-signal");
@@ -297,6 +347,7 @@
       });
       drawPlate();
     }
+    applySettings();
     if (!vinyl || !vinyl.isConnected) {
       vinyl = document.createElement("figure");
       vinyl.className = "ascii-vinyl";
@@ -320,6 +371,7 @@
       spread.append(plate, vinyl);
       drawVinyl();
     }
+    applySettings();
     if (!timer) timer = setInterval(drawPlate, ROTATE_MS);
     if (!playWatch) playWatch = setInterval(() => {
       const b = document.querySelector('[data-testid="control-button-playpause"]');
@@ -353,6 +405,15 @@
     masthead = plate = spread = vinyl = null;
     mounted = false;
   }
+
+  loadSettings();
+  if (!registerSettings()) {
+    const regRetry = setInterval(() => {
+      if (registerSettings()) clearInterval(regRetry);
+    }, 1000);
+    setTimeout(() => clearInterval(regRetry), 20000);
+  }
+  try { Object.defineProperty(window, "__asciiMenuState", { value: () => menuState, configurable: true }); } catch (e) {}
 
   const view = document.querySelector(".Root__main-view");
   if (view) {

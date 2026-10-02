@@ -14,6 +14,9 @@ rendered from album art.
 - **Album ASCII on hover/focus** for card rows; a blinking playing indicator.
 - **Auto-adaptive dither**: each cover is classified (dark/mid/light) and tuned so
   highlights hold and shadows stay hairline-delicate.
+- **Settings built in**: open the profile (account) menu → *ASCII EDITION* to toggle
+  the plate, the vinyl deck, auto-tune, and motion at runtime. Choices persist.
+- **Instrument Serif** for editorial headings (paired with Fragment Mono).
 
 ## Install
 

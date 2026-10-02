@@ -2,7 +2,7 @@
    ASCII EDITION — ink-on-paper riso zine
    fine hairline rules · one spot ink · no glow · no chrome
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Fragment+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fragment+Mono&family=Instrument+Serif:ital@0;1&display=swap');
 
 :root{
   --paper:#F4F2E9;
@@ -482,6 +482,12 @@ img{ image-rendering:auto!important; }
 [data-encore-id=cardTitle]{ transition:color .15s ease; }
 .main-cardImage-imageWrapper{ transition:border-color .18s ease, transform .18s ease; }
 [data-encore-id=card]:hover .main-cardImage-imageWrapper{ transform:translate(-1px,-1px); }
+
+/* settings-driven overrides */
+.ascii-disabled{ display:none!important; }
+body.ascii-motion-off *, body.ascii-motion-off *::before, body.ascii-motion-off *::after{
+  animation:none!important; transition:none!important;
+}
 
 @media (prefers-reduced-motion:reduce){
   *{ animation:none!important; transition:none!important; }
