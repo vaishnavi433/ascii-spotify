@@ -12,7 +12,20 @@
   const ROTATE_MS = 11000;
 
   /* ─── settings ────────────────────────────────────────── */
-  const DEFAULTS = { plate: true, vinyl: true, adapt: true, motion: true };
+  const DEFAULTS = { plate: true, vinyl: true, adapt: true, motion: true, palette: "paper-ink", grain: true };
+  const PALETTES = {
+    "paper-ink":    { label: "Studio",            paper: "#F4F2E9", paper2: "#EFEDE2", paper3: "#E4E1D2", ink: "#15150E", spot: "#009E5A" },
+    "newsprint":    { label: "Morning Edition",   paper: "#EAE7DE", paper2: "#E3E0D5", paper3: "#D8D4C6", ink: "#23221F", spot: "#A6624A" },
+    "riso-blue":    { label: "Neon Dusk",         paper: "#F3F1E6", paper2: "#ECEAE0", paper3: "#E2DFCE", ink: "#20306E", spot: "#E6447D" },
+    "riso-red":     { label: "After Hours",       paper: "#F6F0E3", paper2: "#EFE8D9", paper3: "#E5DCC8", ink: "#271E1C", spot: "#C73E2E" },
+    "forest":       { label: "Forest Floor",      paper: "#EDF0E2", paper2: "#E6EAD8", paper3: "#DBE0CA", ink: "#212B22", spot: "#C77F2A" },
+    "night-press":  { label: "Midnight Press",    paper: "#1C1B19", paper2: "#242320", paper3: "#2E2C28", ink: "#EEECE2", spot: "#E3D456" }
+  };
+  const rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  };
+
   let settings = Object.assign({}, DEFAULTS);
 
   const store = () => window.Spicetify && Spicetify.LocalStorage
@@ -28,15 +41,41 @@
   function saveSettings() {
     try { store().set("ascii-theme:settings", JSON.stringify(settings)); } catch (e) {}
   }
+  function applyPalette() {
+    const p = PALETTES[settings.palette] || PALETTES["paper-ink"];
+    const el = document.documentElement.style;
+    const raw = {
+      "--paper": p.paper, "--paper-2": p.paper2, "--paper-3": p.paper3,
+      "--ink": p.ink, "--spot": p.spot
+    };
+    for (const k in raw) el.setProperty(k, raw[k]);
+    el.setProperty("--ink-70", rgba(p.ink, .70));
+    el.setProperty("--ink-45", rgba(p.ink, .45));
+    el.setProperty("--ink-22", rgba(p.ink, .22));
+    el.setProperty("--rule", rgba(p.ink, .14));
+    el.setProperty("--rule-2", rgba(p.ink, .30));
+    el.setProperty("--spot-tint", rgba(p.spot, .10));
+    const encore = {
+      "--text-base": p.ink, "--text-subdued": rgba(p.ink, .45), "--text-numeric-base": p.ink,
+      "--background-base": p.paper, "--background-elevated": p.paper2,
+      "--background-base-high": p.ink, "--background-highlight": p.spot,
+      "--card-background": p.paper, "--liberty-foreground": p.spot,
+      "--background-brand-base": p.spot, "--primary-button-background": p.ink,
+      "--primary-button-text-base": p.paper, "--focus-outline": "1px solid " + p.spot
+    };
+    for (const k in encore) el.setProperty(k, encore[k]);
+  }
   function applySettings() {
     if (plate) plate.classList.toggle("ascii-disabled", !settings.plate);
     if (vinyl) vinyl.classList.toggle("ascii-disabled", !settings.vinyl);
     document.body.classList.toggle("ascii-motion-off", !settings.motion);
+    document.body.classList.toggle("ascii-grain-off", !settings.grain);
   }
 
   function registerSettings() {
     const M = window.Spicetify && Spicetify.Menu;
     if (!M || !M.Item || !M.SubMenu) { menuState = "api-missing"; return false; }
+    if (!window.Spicetify.React || !window.Spicetify.ReactDOM) { menuState = "waiting-react"; return false; }
     try {
       const add = (label, key, after) => new M.Item(label, settings[key], (it) => {
         settings[key] = !!it.isEnabled;
@@ -53,16 +92,31 @@
           const vd = vinyl && vinyl.querySelector("pre");
           if (vd) { vd.dataset.src = ""; drawVinyl(); }
         }),
+        add("Paper grain", "grain", () => applySettings()),
         add("Motion", "motion", () => applySettings())
       ]);
       sub.register();
+      try {
+        const names = Object.keys(PALETTES);
+        const paletteItems = names.map((name) => new M.Item(
+          PALETTES[name].label, settings.palette === name, (it) => {
+            if (!it.isEnabled) return;
+            settings.palette = name;
+            applyPalette();
+            saveSettings();
+            names.forEach((n, i) => paletteItems[i].setState(n === name));
+          }
+        ));
+        paletteMenuState = "ok";
+        new M.SubMenu("ASCII EDITION · MOOD", paletteItems).register();
+      } catch (pe) { paletteMenuState = "threw:" + pe.message; }
       menuState = "registered";
       return true;
     } catch (e) { menuState = "threw:" + e.message; return false; }
   }
 
   let plate = null, masthead = null, spread = null, vinyl = null,
-      fig = 0, timer = null, clock = null, playWatch = null, mounted = false, menuState = "pending";
+      fig = 0, timer = null, clock = null, playWatch = null, mounted = false, menuState = "pending", paletteMenuState = "pending";
   const cache = new Map();
 
   const loadClean = (url) => new Promise((ok, no) => {
@@ -406,14 +460,81 @@
     mounted = false;
   }
 
+  function buildMoodButton() {
+    const av = document.querySelector('[data-testid="user-widget-link"]');
+    const right = av && av.closest(".main-globalNav-contentRight");
+    if (!right || document.querySelector(".ascii-mood-btn")) return;
+    const btn = document.createElement("button");
+    btn.className = "ascii-mood-btn";
+    btn.setAttribute("aria-label", "Choose mood");
+    btn.title = "Choose mood";
+    btn.textContent = "◍";
+    const anchor = av.closest(".main-globalNav-navLink");
+    right.insertBefore(btn, anchor || right.firstChild);
+
+    const pop = document.createElement("div");
+    pop.className = "ascii-mood-pop";
+    const title = document.createElement("div");
+    title.className = "ascii-mood-pop-title";
+    title.textContent = "MOOD";
+    pop.appendChild(title);
+    const rows = [];
+    Object.keys(PALETTES).forEach((name) => {
+      const p = PALETTES[name];
+      const row = document.createElement("button");
+      row.className = "ascii-mood-row" + (settings.palette === name ? " is-on" : "");
+      const sw = document.createElement("span");
+      sw.className = "ascii-mood-swatch";
+      sw.style.background = p.spot;
+      const lb = document.createElement("span");
+      lb.className = "ascii-mood-name";
+      lb.textContent = p.label;
+      const mk = document.createElement("span");
+      mk.className = "ascii-mood-check";
+      mk.textContent = "✓";
+      row.appendChild(sw); row.appendChild(lb); row.appendChild(mk);
+      row.addEventListener("click", () => {
+        settings.palette = name;
+        applyPalette();
+        saveSettings();
+        rows.forEach((r) => r.classList.toggle("is-on", r === row));
+        pop.classList.remove("ascii-open");
+      });
+      rows.push(row);
+      pop.appendChild(row);
+    });
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      pop.style.top = (r.bottom + 8) + "px";
+      pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = pop.classList.contains("ascii-open");
+      if (!open) place();
+      pop.classList.toggle("ascii-open", !open);
+    });
+    document.addEventListener("click", () => pop.classList.remove("ascii-open"));
+    document.body.appendChild(pop);
+  }
+
   loadSettings();
+  applyPalette();
+  const moodWatch = setInterval(() => {
+    if (document.querySelector('[data-testid="user-widget-link"]')) {
+      buildMoodButton();
+      clearInterval(moodWatch);
+    }
+  }, 500);
+  setTimeout(() => clearInterval(moodWatch), 20000);
   if (!registerSettings()) {
     const regRetry = setInterval(() => {
       if (registerSettings()) clearInterval(regRetry);
     }, 1000);
-    setTimeout(() => clearInterval(regRetry), 20000);
+    setTimeout(() => clearInterval(regRetry), 30000);
   }
-  try { Object.defineProperty(window, "__asciiMenuState", { value: () => menuState, configurable: true }); } catch (e) {}
+  Object.defineProperty(window, "__asciiMenuState", { value: () => menuState, configurable: true });
+  try { Object.defineProperty(window, "__asciiPaletteMenuState", { value: () => paletteMenuState, configurable: true }); } catch (e) {}
 
   const view = document.querySelector(".Root__main-view");
   if (view) {

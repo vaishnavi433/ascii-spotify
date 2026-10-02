@@ -15,7 +15,10 @@ rendered from album art.
 - **Auto-adaptive dither**: each cover is classified (dark/mid/light) and tuned so
   highlights hold and shadows stay hairline-delicate.
 - **Settings built in**: open the profile (account) menu → *ASCII EDITION* to toggle
-  the plate, the vinyl deck, auto-tune, and motion at runtime. Choices persist.
+  the plate, the vinyl deck, auto-tune, paper grain, and motion at runtime. Choices persist.
+- **Moods**: *ASCII EDITION → MOOD* lets you pick the palette — Studio, Morning Edition,
+  Neon Dusk, After Hours, Forest Floor, Midnight Press. The theme never changes color on
+  its own; whatever mood you select stays until you pick another.
 - **Instrument Serif** for editorial headings (paired with Fragment Mono).
 
 ## Install
