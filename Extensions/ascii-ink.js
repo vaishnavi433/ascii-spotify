@@ -508,12 +508,19 @@
       pop.style.top = (r.bottom + 8) + "px";
       pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
     };
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    let lastToggle = 0;
+    const togglePop = (t) => {
+      if (t && t.stopPropagation) t.stopPropagation();
+      const now = Date.now();
+      if (now - lastToggle < 250) return;
+      lastToggle = now;
       const open = pop.classList.contains("ascii-open");
       if (!open) place();
       pop.classList.toggle("ascii-open", !open);
-    });
+    };
+    ["pointerdown", "mousedown", "click"].forEach((type) =>
+      btn.addEventListener(type, togglePop, true)
+    );
     document.addEventListener("click", () => pop.classList.remove("ascii-open"));
     document.body.appendChild(pop);
   }
